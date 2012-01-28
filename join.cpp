@@ -1,3 +1,22 @@
+/* 
+    join - Parallel genomic region joinig tool.
+    Copyright (C) 2012  P. Costea(paul.igor.costea@scilifelab.se)
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of 
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.                  
+
+    For a copy of the GNU Affero General Public License
+    see <http://www.gnu.org/licenses/>.
+*/
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -223,7 +242,7 @@ int main(int argc, char* argv[])
 #endif
   //Read second file into memory!
   std::vector <char*> file2;
-  //Do fast c read()
+  //Do fast read
   char* buffer = new char[lSize];
   if (buffer == NULL) {
     fprintf(stderr,"Unable to allocate needed memory. Need about %d bytes\n",lSize);
@@ -243,7 +262,6 @@ int main(int argc, char* argv[])
   //Assume file is packed
   bool isPacked = true;
 
-  //  fseek(in2,0,SEEK_SET);
   position pos;
   bool hasStart = false;
   tok = strtok(buffer,"\n");
@@ -318,36 +336,41 @@ int main(int argc, char* argv[])
       bool done = false;
       sP = pos.iStart;
       eP = pos.iEnd;
-#pragma omp parallel for default(shared) private(it) firstprivate(rec,col2,final) shared(file2,out,writeOnlyOne)
+#pragma omp parallel for default(shared) private(it) firstprivate(rec,col2,final,writeOnlyOne) shared(file2,out)
       for(it=sP; it<eP; ++it)
       {
 	//int thread = omp_get_thread_num();
 	//fprintf(stdout,"Thread %d doing %d\n",thread,it);
-	//#pragma omp flush (done)
 	if (!done) {
 	  CRecord *rec2 = new CRecord(file2[it],col2);
 	  if (rec->overlap(rec2) > 0) {
 	    char f[2*LINE_MAX_] = "";
+	    found = true;
 	    strcat(f,final);
 	    strcat(f,file2[it]);
-	    strcat(f,"\n");
+	    strcat(f,"\n"); 
 #pragma omp critical
-	    fputs(f,out);
-	    found = true;
-	    if (writeOnlyOne) {
-	      done = true;
+	    {
+	      if (!done)
+		fputs(f,out);
+	      if (writeOnlyOne) 
+		done = true;
 	    }
 	  }
 	  //Cleanup
 	  delete rec2;
 	}
       }
-
       if (!found) {
 	strcat(final,fail);
 	strcat(final,"\n");
 	fputs(final,out);
       }
+    } else {//Chromosome not present!
+      //Still write it out thought
+      strcat(final,fail);
+      strcat(final,"\n");
+      fputs(final,out);
     }
 #ifdef DEBUG
     printf("Done: %s, %d, %d\n",rec->chr,rec->start,rec->end);
