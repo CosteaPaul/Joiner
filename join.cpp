@@ -70,7 +70,8 @@ class CRecord{
    ** @brief Null constructor
    */
   CRecord()
-    :chr(NULL) {};
+    :chr(NULL)
+    ,coherent(false) {};
 
   /**
    ** @brief Copy constructor
@@ -79,12 +80,14 @@ class CRecord{
     start = r.start;
     end = r.end;
     chr = new char[strlen(r.chr)];
+    coherent = r.coherent;
     strcpy(chr,r.chr);
   }
   
   
   CRecord(const char* line, columnDef colDef)
     :chr(NULL)
+    ,coherent(false)
     {
       if (line == NULL) {
 	fprintf(stderr,"Bad pointer\n");
@@ -107,8 +110,10 @@ class CRecord{
 	end = atoi(tok);
 	++found;
       }
-      if (found == 3)
+      if (found == 3) {
+	coherent = true;
 	break;
+      }
       ++pos;
     }
     if (start > end) {//This should be a properly formatted interval
@@ -137,6 +142,7 @@ class CRecord{
   char* chr;
   int start;
   int end;
+  bool coherent;
 };
 
 static int print_usage()
@@ -271,6 +277,10 @@ int main(int argc, char* argv[])
     file2.push_back(tok);
     if (isPacked) {
       CRecord* rec = new CRecord(tok,col2);
+      if (!rec->coherent) {
+	fprintf(stderr,"Chr,Start and End positions seem to be wrong!\nCannot continue\n");
+	return (-1);
+      }
       string c(rec->chr);
       if (c != chr) {
 	if (!hasStart){
@@ -322,6 +332,10 @@ int main(int argc, char* argv[])
       continue;
     }
     CRecord* rec = new CRecord(&line1[0],col1);
+    if (!rec->coherent) {
+      fprintf(stderr,"Wrong position definitions\nGiving up...\n");
+      return -1;
+    }
     char final[2*LINE_MAX_] = "";
     //Remove \n from line1
     line1[strlen(line1)-1] = '\0';
