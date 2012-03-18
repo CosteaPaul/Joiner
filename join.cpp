@@ -1,5 +1,5 @@
 /* 
-    join - Parallel genomic region joinig tool.
+    join - Parallel genomic region joining tool.
     Copyright (C) 2012  P. Costea(paul.igor.costea@scilifelab.se)
 
     This program is free software: you can redistribute it and/or modify
@@ -84,7 +84,9 @@ class CRecord{
     strcpy(chr,r.chr);
   }
   
-  
+  /**
+   ** @brief Proper constructor
+   */
   CRecord(const char* line, columnDef colDef)
     :chr(NULL)
     ,coherent(false)
@@ -273,7 +275,6 @@ int main(int argc, char* argv[])
   tok = strtok(buffer,"\n");
   //Split from buffer!
   while (tok != NULL) {
-    //    char* newLine = new char[strlen(tok)+1];
     file2.push_back(tok);
     if (isPacked) {
       CRecord* rec = new CRecord(tok,col2);
@@ -325,7 +326,8 @@ int main(int argc, char* argv[])
   all.iStart = 0;
   all.iEnd = file2.size();
   int sP,eP;
-
+  int chrMissCount = 0;
+  int total = 0;
   while (fgets(line1,LINE_MAX_,in1) != NULL) {
     if (line1[0] == '#') {
       //This is either a header of a commented line, skip!
@@ -342,6 +344,7 @@ int main(int argc, char* argv[])
     strcat(final,line1);
     strcat(final,"\t");
     bool found = false;
+    ++total;
     map<string,position>::iterator iter;
     iter = chrMap.find(rec->chr);
     if ((iter != chrMap.end()) || (!isPacked)) {
@@ -385,6 +388,7 @@ int main(int argc, char* argv[])
       strcat(final,fail);
       strcat(final,"\n");
       fputs(final,out);
+      ++chrMissCount;
     }
 #ifdef DEBUG
     printf("Done: %s, %d, %d\n",rec->chr,rec->start,rec->end);
@@ -392,7 +396,8 @@ int main(int argc, char* argv[])
     delete rec;
     
   }
-  
+  if (chrMissCount != 0)
+    fprintf(stdout,"Missed %d out of %d because chromosome name did not match!\nMake sure the two files you are joining have the same chr name definitions\n",chrMissCount,total);
   fclose(in1);
   delete[] buffer;
   fclose(out);
