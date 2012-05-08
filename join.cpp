@@ -325,18 +325,26 @@ int main(int argc, char* argv[])
   position all;
   all.iStart = 0;
   all.iEnd = file2.size();
-  int sP,eP;
   int chrMissCount = 0;
   int total = 0;
-  while (fgets(line1,LINE_MAX_,in1) != NULL) {
+#pragma omp parallel shared(in1,total,chrMissCount,chrMap,file2,out) private(line1)
+  {
+    while (true) {
+      void *ret = NULL;
+    #pragma omp critical
+      ret = fgets(line1,LINE_MAX_,in1);
+    if (ret == NULL)
+      break;
     if (line1[0] == '#') {
       //This is either a header of a commented line, skip!
       continue;
     }
+    int sP,eP;
+    std::string outBuffer = "";
     CRecord* rec = new CRecord(&line1[0],col1);
     if (!rec->coherent) {
       fprintf(stderr,"Wrong position definitions\nGiving up...\n");
-      return -1;
+      break;
     }
     char final[2*LINE_MAX_] = "";
     //Remove \n from line1
@@ -344,6 +352,7 @@ int main(int argc, char* argv[])
     strcat(final,line1);
     strcat(final,"\t");
     bool found = false;
+    #pragma omp critical
     ++total;
     map<string,position>::iterator iter;
     iter = chrMap.find(rec->chr);
@@ -353,7 +362,7 @@ int main(int argc, char* argv[])
       bool done = false;
       sP = pos.iStart;
       eP = pos.iEnd;
-#pragma omp parallel for default(shared) private(it) firstprivate(rec,col2,final,writeOnlyOne) shared(file2,out)
+      //#pragma omp parallel for default(shared) private(it) firstprivate(rec,col2,final,writeOnlyOne) shared(file2,out)
       for(it=sP; it<eP; ++it)
       {
 	//int thread = omp_get_thread_num();
@@ -361,15 +370,12 @@ int main(int argc, char* argv[])
 	if (!done) {
 	  CRecord *rec2 = new CRecord(file2[it],col2);
 	  if (rec->overlap(rec2) > 0) {
-	    char f[2*LINE_MAX_] = "";
 	    found = true;
-	    strcat(f,final);
-	    strcat(f,file2[it]);
-	    strcat(f,"\n"); 
-#pragma omp critical
+	    outBuffer += final;
+	    outBuffer += file2[it];
+	    outBuffer += '\n';
+	    //#pragma omp critical
 	    {
-	      if (!done)
-		fputs(f,out);
 	      if (writeOnlyOne) 
 		done = true;
 	    }
@@ -379,9 +385,14 @@ int main(int argc, char* argv[])
 	}
       }
       if (!found) {
+	
 	strcat(final,fail);
 	strcat(final,"\n");
+	#pragma omp critical
 	fputs(final,out);
+      } else {//Dump buffer
+	#pragma omp critical
+	fputs(outBuffer.c_str(),out);
       }
     } else {//Chromosome not present!
       //Still write it out thought
@@ -395,6 +406,7 @@ int main(int argc, char* argv[])
 #endif
     delete rec;
     
+  }
   }
   if (chrMissCount != 0)
     fprintf(stdout,"Missed %d out of %d because chromosome name did not match!\nMake sure the two files you are joining have the same chr name definitions\n",chrMissCount,total);
